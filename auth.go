@@ -34,16 +34,16 @@ func New(conf *oauth2.Config, storage Storage, cacheSize int, secret string, exp
 	}, nil
 }
 
-func (a *Auth) PostAuth(ctx context.Context, code, lang string) (string, error) {
+func (a *Auth) PostAuth(ctx context.Context, code, lang string) (string, string, error) {
 
 	tok, err := a.conf.Exchange(ctx, code)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	mixinUser, err := mixin.UserMe(ctx, tok.AccessToken)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	a.cache.Remove(mixinUser.UserID)
@@ -55,10 +55,12 @@ func (a *Auth) PostAuth(ctx context.Context, code, lang string) (string, error) 
 	}
 
 	if err := a.storage.UpsertUser(&user); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return a.SignAuthToken(mixinUser.UserID)
+	token, err := a.SignAuthToken(mixinUser.UserID)
+
+	return mixinUser.UserID, token, err
 }
 
 func (a *Auth) Refresh(ctx context.Context, userID, lang string) (string, error) {
