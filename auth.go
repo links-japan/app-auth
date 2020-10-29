@@ -115,7 +115,7 @@ func (a *Auth) RequireAuth(c *gin.Context) {
 	h := c.GetHeader("Authorization")
 	s := strings.Split(h, "Bearer ")
 	if len(s) < 2 || s[1] == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusUnauthorized, gin.H{
 			"msg": "invalid token",
 		})
 		c.Abort()
@@ -124,7 +124,7 @@ func (a *Auth) RequireAuth(c *gin.Context) {
 
 	payload, err := a.ValidateAuthToken(s[1])
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusUnauthorized, gin.H{
 			"msg": "invalid token",
 		})
 		c.Abort()
