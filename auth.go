@@ -44,6 +44,9 @@ func (a *Auth) PostAuth(ctx context.Context, code, lang string) (string, string,
 	fmt.Println("lang in app-auth", lang)
 
 	fmt.Printf("auth: %+v \n", a)
+	fmt.Printf("config in Auth %+v \n", a.conf)
+	fmt.Printf("storage in Auth %+v \n", a.storage)
+	fmt.Printf("cache in Auth %+v \n", a.cache)
 
 	tok, err := a.conf.Exchange(ctx, code)
 	if err != nil {
