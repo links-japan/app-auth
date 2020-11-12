@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -9,7 +10,6 @@ import (
 	"github.com/fox-one/mixin-sdk-go"
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 )
 
@@ -38,7 +38,12 @@ func New(conf *oauth2.Config, storage Storage, cacheSize int, secret string, exp
 
 func (a *Auth) PostAuth(ctx context.Context, code, lang string) (string, string, error) {
 
-	logrus.Debugln("PostAuth in app-auth",a)
+	fmt.Println("PostAuth in app-auth", a)
+	fmt.Println("ctx in app-auth", ctx)
+	fmt.Println("code in app-auth", code)
+	fmt.Println("lang in app-auth", lang)
+
+	fmt.Printf("auth: %+v \n", a)
 
 	tok, err := a.conf.Exchange(ctx, code)
 	if err != nil {
