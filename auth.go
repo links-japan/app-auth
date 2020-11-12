@@ -5,43 +5,45 @@ import (
 	"github.com/fox-one/mixin-sdk-go"
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru"
-	"golang.org/x/oauth2"
 	"net/http"
 	"strings"
 	"time"
 )
 
 type Auth struct {
-	conf    *oauth2.Config
 	storage Storage
 	cache   *lru.ARCCache
 	secret  string
 	expiry  time.Duration
+
+	clientID     string
+	clientSecret string
 }
 
-func New(conf *oauth2.Config, storage Storage, cacheSize int, secret string, expiry time.Duration) (*Auth, error) {
+func New(clientID, clientSecret string, storage Storage, cacheSize int, secret string, expiry time.Duration) (*Auth, error) {
 	cache, err := lru.NewARC(cacheSize)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Auth{
-		conf:    conf,
-		storage: storage,
-		cache:   cache,
-		secret:  secret,
-		expiry:  expiry,
+		clientID:     clientID,
+		clientSecret: clientSecret,
+		storage:      storage,
+		cache:        cache,
+		secret:       secret,
+		expiry:       expiry,
 	}, nil
 }
 
 func (a *Auth) PostAuth(ctx context.Context, code, lang string) (string, string, error) {
 
-	tok, err := a.conf.Exchange(ctx, code)
+	accessToken, _, err := mixin.AuthorizeToken(ctx, a.clientID, a.clientSecret, code, "")
 	if err != nil {
 		return "", "", err
 	}
 
-	mixinUser, err := mixin.UserMe(ctx, tok.AccessToken)
+	mixinUser, err := mixin.UserMe(ctx, accessToken)
 	if err != nil {
 		return "", "", err
 	}
@@ -50,7 +52,7 @@ func (a *Auth) PostAuth(ctx context.Context, code, lang string) (string, string,
 
 	user := User{
 		MixinUser:   mixinUser,
-		AccessToken: tok.AccessToken,
+		AccessToken: accessToken,
 		Lang:        lang,
 	}
 
@@ -87,13 +89,12 @@ func (a *Auth) Refresh(ctx context.Context, userID, lang string) (string, error)
 	return a.SignAuthToken(userID)
 }
 
-func (a *Auth) Client(ctx context.Context, c *gin.Context) (*http.Client, error) {
+func (a *Auth) Client(c *gin.Context) (*mixin.Client, error) {
 	userID := c.MustGet("user_id").(string)
 
 	val, hit := a.cache.Get(userID)
-	tok := oauth2.Token{AccessToken: val.(string)}
 	if hit {
-		return a.conf.Client(ctx, &tok), nil
+		return mixin.NewFromAccessToken(val.(string)), nil
 	}
 
 	user := User{
@@ -107,8 +108,8 @@ func (a *Auth) Client(ctx context.Context, c *gin.Context) (*http.Client, error)
 	}
 
 	a.cache.Add(userID, user.AccessToken)
-	tok = oauth2.Token{AccessToken: user.AccessToken}
-	return a.conf.Client(ctx, &tok), nil
+
+	return mixin.NewFromAccessToken(user.AccessToken), nil
 }
 
 func (a *Auth) RequireAuth(c *gin.Context) {
