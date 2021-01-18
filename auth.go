@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/fox-one/mixin-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -114,9 +115,11 @@ func (a *Auth) Client(c *gin.Context) (*mixin.Client, error) {
 }
 
 func (a *Auth) RequireAuth(c *gin.Context) {
-	h := c.GetHeader("Authorization")
-	s := strings.Split(h, "Bearer ")
-	if len(s) < 2 || s[1] == "" {
+	t := a.readTokenFromCookie(c)
+	if len(t) == 0 {
+		t = a.readTokenFromCookie(c)
+	}
+	if len(t) == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"msg": "invalid token",
 		})
@@ -124,7 +127,7 @@ func (a *Auth) RequireAuth(c *gin.Context) {
 		return
 	}
 
-	payload, err := a.ValidateAuthToken(s[1])
+	payload, err := a.ValidateAuthToken(t)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"msg": "invalid token",
@@ -135,4 +138,21 @@ func (a *Auth) RequireAuth(c *gin.Context) {
 
 	c.Set("user_id", payload.UserID)
 	c.Next()
+}
+
+func (a *Auth) readTokenFromHeader(c *gin.Context) string {
+	h := c.GetHeader("Authorization")
+	s := strings.Split(h, "Bearer ")
+	if len(s) < 2 || s[1] == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s", s[1])
+}
+
+func (a *Auth) readTokenFromCookie(c *gin.Context) string {
+	cookie, err := c.Cookie("token")
+	if err != nil {
+		return ""
+	}
+	return cookie
 }
