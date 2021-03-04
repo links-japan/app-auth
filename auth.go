@@ -115,7 +115,7 @@ func (a *Auth) Client(c *gin.Context) (*mixin.Client, error) {
 }
 
 func (a *Auth) RequireAuth(c *gin.Context) {
-	t := a.readTokenFromCookie(c)
+	t := a.readTokenFromHeader(c)
 	if len(t) == 0 {
 		t = a.readTokenFromCookie(c)
 	}
