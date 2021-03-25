@@ -140,6 +140,21 @@ func (a *Auth) RequireAuth(c *gin.Context) {
 	c.Next()
 }
 
+func (a *Auth) GetAuthUser(c *gin.Context) (string, bool){
+	t := a.readTokenFromHeader(c)
+	if len(t) == 0 {
+		t = a.readTokenFromCookie(c)
+	}
+	if len(t) == 0 {
+		return "", false
+	}
+	payload, err := a.ValidateAuthToken(t)
+	if err != nil {
+		return "", false
+	}
+	return payload.UserID, true
+}
+
 func (a *Auth) readTokenFromHeader(c *gin.Context) string {
 	h := c.GetHeader("Authorization")
 	s := strings.Split(h, "Bearer ")
