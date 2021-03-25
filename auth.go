@@ -146,11 +146,11 @@ func (a *Auth) GetAuthUser(c *gin.Context) (string, bool){
 		t = a.readTokenFromCookie(c)
 	}
 	if len(t) == 0 {
-		return nil, false
+		return "", false
 	}
 	payload, err := a.ValidateAuthToken(t)
 	if err != nil {
-		return nil, false
+		return "", false
 	}
 	return payload.UserID, true
 }
