@@ -140,19 +140,21 @@ func (a *Auth) RequireAuth(c *gin.Context) {
 	c.Next()
 }
 
-func (a *Auth) GetAuthUser(c *gin.Context) (string, bool){
+func (a *Auth) SetUserWhenExists(c *gin.Context) {
 	t := a.readTokenFromHeader(c)
 	if len(t) == 0 {
 		t = a.readTokenFromCookie(c)
 	}
 	if len(t) == 0 {
-		return "", false
+		c.Next()
 	}
 	payload, err := a.ValidateAuthToken(t)
 	if err != nil {
-		return "", false
+		c.Next()
 	}
-	return payload.UserID, true
+
+	c.Set("user_id", payload.UserID)
+	c.Next()
 }
 
 func (a *Auth) readTokenFromHeader(c *gin.Context) string {
