@@ -147,10 +147,12 @@ func (a *Auth) SetUserWhenExists(c *gin.Context) {
 	}
 	if len(t) == 0 {
 		c.Next()
+		return
 	}
 	payload, err := a.ValidateAuthToken(t)
 	if err != nil {
 		c.Next()
+		return
 	}
 
 	c.Set("user_id", payload.UserID)
