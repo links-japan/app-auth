@@ -15,18 +15,21 @@ type Cache interface {
 }
 
 type SimpleCache struct {
-	cache *lru.ARCCache
+	cache *lru.Cache
 }
 
-func NewSimpleCache(size int) (*lru.Cache, error) {
+func NewSimpleCache(size int) (*SimpleCache, error) {
 	cache, err := lru.New(size)
 	if err != nil {
 		return nil, err
 	}
-	return cache, nil
+
+	return &SimpleCache{
+		cache: cache,
+	}, nil
 }
 
-func (s *SimpleCache) Get(key string) (*User, error) {
+func (s *SimpleCache) Get(ctx context.Context, key string) (*User, error) {
 	val, ok := s.cache.Get(key)
 	if !ok {
 		return nil, nil
@@ -58,14 +61,14 @@ func (s *SimpleCache) Exist(ctx context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
-func NewRedisCache(addr string) RedisCache {
+func NewRedisCache(addr string) *RedisCache {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
 
-	return RedisCache{
+	return &RedisCache{
 		rdb,
 	}
 }

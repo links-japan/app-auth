@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/fox-one/mixin-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -50,7 +51,9 @@ func (a *MixinAuth) PostAuth(ctx context.Context, code, lang string) (string, st
 		Lang:        lang,
 	}
 
-	_ = a.cache.Set(ctx, mixinUser.UserID, &user)
+	if err = a.cache.Set(ctx, mixinUser.UserID, &user); err != nil {
+		log.Println(err)
+	}
 
 	if err := a.storage.UpsertUser(&user); err != nil {
 		return "", "", err
@@ -75,14 +78,18 @@ func (a *MixinAuth) Refresh(ctx context.Context, userID, lang string) (string, e
 		if err := a.storage.GetUser(&user); err != nil {
 			return "", err
 		}
-		_ = a.cache.Set(ctx, userID, u)
+		if err = a.cache.Set(ctx, userID, u); err != nil {
+			log.Println(err)
+		}
 	} else {
 		user = *u
 	}
 
 	// verify user's mixin access token
 	if _, err := mixin.UserMe(ctx, user.AccessToken); err != nil {
-		_ = a.cache.Remove(ctx, userID)
+		if err := a.cache.Remove(ctx, userID); err != nil {
+			log.Println(err)
+		}
 		return "", err
 	}
 
@@ -99,7 +106,10 @@ func (a *MixinAuth) Refresh(ctx context.Context, userID, lang string) (string, e
 func (a *MixinAuth) Client(c *gin.Context) (*mixin.Client, error) {
 	userID := c.MustGet("user_id").(string)
 
-	u, _ := a.cache.Get(context.TODO(), userID)
+	u, err := a.cache.Get(context.TODO(), userID)
+	if err != nil {
+		log.Println(err)
+	}
 	if u != nil {
 		return mixin.NewFromAccessToken(u.AccessToken), nil
 	}

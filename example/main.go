@@ -17,10 +17,11 @@ func main() {
 	router := gin.Default()
 
 	cache := auth.NewRedisCache(os.Getenv("REDIS_ADDR"))
+	//cache, _ := auth.NewSimpleCache(1024)
 
 	au, err := auth.NewMockAuth(
 		&AuthStorage{},
-		&cache,
+		cache,
 		"123",
 		24*time.Hour)
 	if err != nil {
