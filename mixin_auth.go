@@ -6,27 +6,21 @@ import (
 
 	"github.com/fox-one/mixin-sdk-go"
 	"github.com/gin-gonic/gin"
-	lru "github.com/hashicorp/golang-lru"
 	"net/http"
 	"strings"
 	"time"
 )
 
 type MixinAuth struct {
-	storage Storage
-	cache   *lru.ARCCache
-	secret  string
-	expiry  time.Duration
-
+	storage      Storage
+	secret       string
+	expiry       time.Duration
+	cache        Cache
 	clientID     string
 	clientSecret string
 }
 
-func New(clientID, clientSecret string, storage Storage, cacheSize int, secret string, expiry time.Duration) (*MixinAuth, error) {
-	cache, err := lru.NewARC(cacheSize)
-	if err != nil {
-		return nil, err
-	}
+func New(clientID, clientSecret string, storage Storage, cache Cache, secret string, expiry time.Duration) (*MixinAuth, error) {
 
 	return &MixinAuth{
 		clientID:     clientID,
@@ -50,13 +44,13 @@ func (a *MixinAuth) PostAuth(ctx context.Context, code, lang string) (string, st
 		return "", "", err
 	}
 
-	a.cache.Remove(mixinUser.UserID)
-
 	user := User{
 		MixinUser:   mixinUser,
 		AccessToken: accessToken,
 		Lang:        lang,
 	}
+
+	_ = a.cache.Set(ctx, mixinUser.UserID, &user)
 
 	if err := a.storage.UpsertUser(&user); err != nil {
 		return "", "", err
@@ -75,17 +69,28 @@ func (a *MixinAuth) Refresh(ctx context.Context, userID, lang string) (string, e
 		},
 	}
 
-	if err := a.storage.GetUser(&user); err != nil {
-		return "", err
+	// try to get user from cache or database
+	u, err := a.cache.Get(ctx, userID)
+	if u == nil || err != nil {
+		if err := a.storage.GetUser(&user); err != nil {
+			return "", err
+		}
+		_ = a.cache.Set(ctx, userID, u)
+	} else {
+		user = *u
 	}
 
+	// verify user's mixin access token
 	if _, err := mixin.UserMe(ctx, user.AccessToken); err != nil {
-		a.cache.Remove(userID)
+		_ = a.cache.Remove(ctx, userID)
 		return "", err
 	}
 
-	if err := a.storage.UpdateUser(&user, map[string]interface{}{"lang": lang}); err != nil {
-		return "", err
+	// if user lang change update user lang
+	if user.Lang != lang {
+		if err := a.storage.UpdateUser(&user, map[string]interface{}{"lang": lang}); err != nil {
+			return "", err
+		}
 	}
 
 	return a.SignAuthToken(userID)
@@ -94,9 +99,9 @@ func (a *MixinAuth) Refresh(ctx context.Context, userID, lang string) (string, e
 func (a *MixinAuth) Client(c *gin.Context) (*mixin.Client, error) {
 	userID := c.MustGet("user_id").(string)
 
-	val, hit := a.cache.Get(userID)
-	if hit {
-		return mixin.NewFromAccessToken(val.(string)), nil
+	u, _ := a.cache.Get(context.TODO(), userID)
+	if u != nil {
+		return mixin.NewFromAccessToken(u.AccessToken), nil
 	}
 
 	user := User{
@@ -108,8 +113,6 @@ func (a *MixinAuth) Client(c *gin.Context) (*mixin.Client, error) {
 	if err := a.storage.GetUser(&user); err != nil {
 		return nil, err
 	}
-
-	a.cache.Add(userID, user.AccessToken)
 
 	return mixin.NewFromAccessToken(user.AccessToken), nil
 }
