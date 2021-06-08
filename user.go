@@ -4,6 +4,6 @@ import "github.com/fox-one/mixin-sdk-go"
 
 type User struct {
 	MixinUser   *mixin.User
-	AccessToken string
-	Lang        string
+	AccessToken string `json:"access_token"`
+	Lang        string `json:"lang"`
 }

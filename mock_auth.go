@@ -6,24 +6,18 @@ import (
 	"fmt"
 	"github.com/fox-one/mixin-sdk-go"
 	"github.com/gin-gonic/gin"
-	lru "github.com/hashicorp/golang-lru"
 	"net/http"
 	"time"
 )
 
 type MockAuth struct {
 	storage Storage
-	cache   *lru.ARCCache
+	cache   Cache
 	secret  string
 	expiry  time.Duration
 }
 
-func NewMockAuth(storage Storage, cacheSize int, secret string, expiry time.Duration) (*MockAuth, error) {
-	cache, err := lru.NewARC(cacheSize)
-	if err != nil {
-		return nil, err
-	}
-
+func NewMockAuth(storage Storage, cache Cache, secret string, expiry time.Duration) (*MockAuth, error) {
 	return &MockAuth{
 		storage: storage,
 		cache:   cache,
@@ -40,18 +34,20 @@ func (a *MockAuth) PostAuth(ctx context.Context, code, lang string) (string, str
 	inst.Write([]byte(userID))
 	h := inst.Sum([]byte(""))
 
+	_ = a.cache.Remove(ctx, userID)
+
 	mixinUser := &mixin.User{
 		UserID:         userID,
 		IdentityNumber: fmt.Sprintf("%x", h[:16]),
 		FullName:       fmt.Sprintf("%x", h[:16]),
 	}
 
-	a.cache.Remove(mixinUser.UserID)
-
 	user := User{
 		MixinUser:   mixinUser,
 		Lang:        lang,
 	}
+
+	_ = a.cache.Set(ctx, userID, &user)
 
 	if err := a.storage.UpsertUser(&user); err != nil {
 		return "", "", err
@@ -69,12 +65,15 @@ func (a *MockAuth) Refresh(ctx context.Context, userID, lang string) (string, er
 		},
 	}
 
-	if err := a.storage.GetUser(&user); err != nil {
-		return "", err
-	}
-
-	if err := a.storage.UpdateUser(&user, map[string]interface{}{"lang": lang}); err != nil {
-		return "", err
+	// try to get user from cache or database
+	u, err := a.cache.Get(ctx, userID)
+	if u == nil || err != nil {
+		if err := a.storage.GetUser(&user); err != nil {
+			return "", err
+		}
+		_ = a.cache.Set(ctx, userID, u)
+	} else {
+		user = *u
 	}
 
 	return a.SignAuthToken(userID)
