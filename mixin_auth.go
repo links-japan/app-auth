@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -19,9 +20,10 @@ type MixinAuth struct {
 	cache        Cache
 	clientID     string
 	clientSecret string
+	phonePrefix  string
 }
 
-func New(clientID, clientSecret string, storage Storage, cache Cache, secret string, expiry time.Duration) (*MixinAuth, error) {
+func New(clientID, clientSecret string, storage Storage, cache Cache, secret string, expiry time.Duration, phonePrefix string) (*MixinAuth, error) {
 
 	return &MixinAuth{
 		clientID:     clientID,
@@ -30,6 +32,7 @@ func New(clientID, clientSecret string, storage Storage, cache Cache, secret str
 		cache:        cache,
 		secret:       secret,
 		expiry:       expiry,
+		phonePrefix:  phonePrefix,
 	}, nil
 }
 
@@ -43,6 +46,10 @@ func (a *MixinAuth) PostAuth(ctx context.Context, code, lang string) (string, st
 	mixinUser, err := mixin.UserMe(ctx, accessToken)
 	if err != nil {
 		return "", "", err
+	}
+
+	if !strings.HasPrefix(mixinUser.Phone, a.phonePrefix) {
+		return "", "", errors.New("not japan phone number")
 	}
 
 	user := User{
@@ -86,11 +93,16 @@ func (a *MixinAuth) Refresh(ctx context.Context, userID, lang string) (string, e
 	}
 
 	// verify user's mixin access token
-	if _, err := mixin.UserMe(ctx, user.AccessToken); err != nil {
+	mixinUser, err := mixin.UserMe(ctx, user.AccessToken)
+	if err != nil {
 		if err := a.cache.Remove(ctx, userID); err != nil {
 			log.Println(err)
 		}
 		return "", err
+	}
+
+	if !strings.HasPrefix(mixinUser.Phone, a.phonePrefix) {
+		return "", errors.New("not japan phone number")
 	}
 
 	// if user lang change update user lang
